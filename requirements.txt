@@ -4,4 +4,3 @@ pandas
 numpy<2.0.0
 plotly
 streamlit-aggrid
-pandas_ta
