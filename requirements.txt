@@ -1,0 +1,7 @@
+streamlit
+yfinance
+pandas
+numpy
+plotly
+st-aggrid
+pandas_ta
