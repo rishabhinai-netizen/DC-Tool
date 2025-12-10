@@ -1,42 +1,47 @@
 # file: app/cache.py
 import os
-import pickle
 import time
-from datetime import datetime, timedelta
-from app.logger import log_error
+import pickle
+import pandas as pd
+from typing import Optional
+from app.logger import log_usage, log_error
 
-CACHE_DIR = "./data/cache"
+CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-def get_cache_path(ticker, period, auto_adjust):
-    safe_ticker = ticker.replace("=", "_").replace(".NS", "_NS")
-    return os.path.join(CACHE_DIR, f"{safe_ticker}_{period}_{auto_adjust}.pkl")
+def _cache_path(ticker: str, period: str, auto_adjust: bool) -> str:
+    safe = ticker.replace("/", "_").replace(" ", "_")
+    adj = "adj" if auto_adjust else "raw"
+    fname = f"{safe}_{period}_{adj}.pkl"
+    return os.path.join(CACHE_DIR, fname)
 
-def save_to_cache(ticker, df, period="2y", auto_adjust=True):
-    """Saves dataframe to disk cache."""
+def set_cache(ticker: str, period: str, df: pd.DataFrame, auto_adjust: bool = True) -> None:
+    """Write dataframe to disk cache (overwrite)."""
     try:
-        path = get_cache_path(ticker, period, auto_adjust)
-        with open(path, 'wb') as f:
-            pickle.dump(df, f)
+        path = _cache_path(ticker, period, auto_adjust)
+        with open(path, "wb") as f:
+            pickle.dump({"ts": time.time(), "df": df}, f)
+        log_usage(f"cache_set:{ticker}:{period}")
     except Exception as e:
-        log_error(e, f"Failed to save cache for {ticker}")
+        log_error(e, {"ticker": ticker, "action": "set_cache"})
 
-def load_from_cache(ticker, period="2y", auto_adjust=True, ttl_minutes=60):
-    """Loads dataframe from disk if exists and not expired."""
+def get_cached(ticker: str, period: str, auto_adjust: bool = True, ttl_seconds: int = 6*3600) -> Optional[pd.DataFrame]:
+    """Return cached dataframe if exists and not expired, else None."""
     try:
-        path = get_cache_path(ticker, period, auto_adjust)
+        path = _cache_path(ticker, period, auto_adjust)
         if not os.path.exists(path):
             return None
-        
-        # Check Expiry
-        mtime = os.path.getmtime(path)
-        cache_time = datetime.fromtimestamp(mtime)
-        if datetime.now() - cache_time > timedelta(minutes=ttl_minutes):
-            return None # Expired
-        
-        with open(path, 'rb') as f:
-            df = pickle.load(f)
-        return df
+        with open(path, "rb") as f:
+            payload = pickle.load(f)
+        ts = payload.get("ts", 0)
+        if (time.time() - ts) > ttl_seconds:
+            # expired
+            return None
+        df = payload.get("df")
+        if isinstance(df, pd.DataFrame):
+            log_usage(f"cache_hit:{ticker}:{period}")
+            return df
+        return None
     except Exception as e:
-        log_error(e, f"Failed to load cache for {ticker}")
+        log_error(e, {"ticker": ticker, "action": "get_cached"})
         return None
