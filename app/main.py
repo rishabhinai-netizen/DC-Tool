@@ -1,4 +1,17 @@
 # file: app/main.py
+# ---- Add this block at the top (before any other imports) ----
+import os
+import sys
+
+# When Streamlit runs app/main.py as a script, Python's import path may
+# not include the repository root. Ensure the repo root (parent of this file)
+# is on sys.path so `import app.xxx` works consistently in all environments.
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+# ---- End of block ----
+# (Existing imports follow here)
+# file: app/main.py
 import streamlit as st
 import pandas as pd
 import time
